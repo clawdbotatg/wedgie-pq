@@ -49,11 +49,23 @@ cd mp/p2 && uv run --with pyelftools --with ar make MPY_DIR=/path/to/micropython
 
 `stubs/` stands in for the C library headers brew's bare compiler doesn't have.
 
+## On a real wedgie
+
+RP2040 Pico, firmware 0.3.26, Trust M V1, key from the chip's random generator (2026-10-08).
+The signature matched `ref/wots.py` exactly.
+
+| What | Time |
+|---|---|
+| One Poseidon2 permutation | 0.92 ms |
+| Public key (63 chains x 15 hashes) | 1.07 s |
+| Sign | 0.55 s |
+| Verify | 0.59 s |
+| Trust M `derive` (TLS PRF, 32 bytes) | 50 ms |
+
 ## Next
 
-1. Run `app/bench.py` on a real wedgie with a Trust M; check its signature with `ref/wots.py`.
-2. The seed in the Trust M (`derive`), and a counter so no key number is used twice.
-3. A Plonky3 circuit: k of n WOTS signatures over a Merkle root of owners.
-4. A contract that checks the STARK and acts as the Safe owner.
+1. The seed in the Trust M (`derive`), and a counter so no key number is used twice.
+2. A Plonky3 circuit: k of n WOTS signatures over a Merkle root of owners.
+3. A contract that checks the STARK and acts as the Safe owner.
 
 MIT
