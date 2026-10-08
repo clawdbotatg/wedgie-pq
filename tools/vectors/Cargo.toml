@@ -1,0 +1,11 @@
+[package]
+name = "vectors"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+p3-field = "0.8.0"
+p3-koala-bear = "0.8.0"
+p3-poseidon2 = "0.8.0"
+p3-symmetric = "0.8.0"
+rand = "0.9"

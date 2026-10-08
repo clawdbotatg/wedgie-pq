@@ -1,0 +1,5 @@
+tools/vectors/target/
+mp/p2/build-armv6m/
+mp/p2/p2.mpy
+__pycache__/
+mp/p2/.mpy_ld_cache-*/
