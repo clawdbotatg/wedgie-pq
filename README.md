@@ -62,11 +62,14 @@ The signature matched `ref/wots.py` exactly.
 | Verify | 0.59 s |
 | Trust M `derive` from the stored seed (`app/pq_seed.py`) | 1.8 s |
 | Trust M counter step | 25 ms |
+| Sign with the stored seed, next public key included (`app/sign_seed.py`) | 6.4 s |
 
 ## Next
 
-1. The seed in the Trust M (`derive`), and a counter so no key number is used twice.
-2. A Plonky3 circuit: k of n WOTS signatures over a Merkle root of owners.
-3. A contract that checks the STARK and acts as the Safe owner.
+Done: the seed in the Trust M (`app/pq_seed.py`, not locked yet), a counter so no key number is
+used twice, checked with `tools/check_seed.py`.
+
+1. A Plonky3 circuit: k of n WOTS signatures over a Merkle root of owners.
+2. A contract that checks the STARK and acts as the Safe owner.
 
 MIT
