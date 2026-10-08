@@ -15,7 +15,8 @@ def ready(c):
 
 def setup(c):
     """Make the seed and the counter. Changes chip metadata: see lock() for the permanent part."""
-    c.write(SEED, c.random(64), erase=True)        # the seed passes through RAM once, here
+    c.write(SEED, c.random(64), erase=True)        # the seed passes through RAM once, here. 64 bytes:
+                                                   # a V1 refused derive from 32, 48, 100 and 140
     c.set_metadata(SEED, {0xE8: b"\x21", 0xD1: b"\xff", 0xD3: b"\x00"})
     c.set_counter(CTR, 0, LIMIT)
 
@@ -28,7 +29,8 @@ def lock(c):
 
 
 def key(c, n):
-    """Key number n's 32 bytes. Fine for public keys; to sign, take n from spend()."""
+    """Key number n's 32 bytes. Fine for public keys; to sign, take n from spend(). 1.8 s on a V1
+    (50 ms from a session secret, but a V1 won't derive from the seed into a session)."""
     return c.derive(SEED, 32, b"wots" + n.to_bytes(4, "big"), method="prf256")
 
 

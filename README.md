@@ -60,7 +60,8 @@ The signature matched `ref/wots.py` exactly.
 | Public key (63 chains x 15 hashes) | 1.07 s |
 | Sign | 0.55 s |
 | Verify | 0.59 s |
-| Trust M `derive` (TLS PRF, 32 bytes) | 50 ms |
+| Trust M `derive` from the stored seed (`app/pq_seed.py`) | 1.8 s |
+| Trust M counter step | 25 ms |
 
 ## Next
 
