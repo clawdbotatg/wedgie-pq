@@ -1,8 +1,8 @@
 // SLH-DSA signing (FIPS 205), the SHA2-128s and SHA2-128f sets. A MicroPython native module for the
 // wedgie (RP2040), and a plain C program on a computer (-DSLH_HOST) to check it.
 // One key signs any number of times: no counter, nothing to keep between signatures.
-// A signature is made in parts (begin, fors, then one layer at a time) so the caller never holds
-// more than one part in memory and never sits in one call for minutes.
+// A signature is made in parts (begin, each FORS tree, then one layer at a time) so the caller never holds
+// more than one part in memory (at most 704 bytes) and never sits in one call for minutes.
 #ifndef SLH_HOST
 #include "py/dynruntime.h"
 #else
@@ -119,6 +119,7 @@ typedef struct {
     uint8_t sk_seed[N], pk_seed[N];
     uint8_t root[N];             // what the next layer signs
     uint8_t md[25];              // the message digest's FORS part
+    sha_t roots;                 // the hash over the FORS roots, as they come
 } slh_t;
 
 // An address (FIPS 205 ADRS), in the 22-byte compressed form the SHA2 sets hash.
@@ -384,38 +385,36 @@ static void slh_begin(slh_t *c, int set, const uint8_t *sk_seed, const uint8_t *
     c->layer = 0;
 }
 
-// The FORS part: k x (a + 1) x 16 bytes into out. Leaves what layer 0 signs in c->root.
-static size_t slh_fors(slh_t *c, uint8_t *out) {
-    sha_t s;
-    adrs_t a = { 0 }, pk;
+// FORS tree i (0..k-1, in order): its secret and path, (a + 1) x 16 bytes, into out. One tree at a time
+// so the caller's buffer stays small. After the last, what layer 0 signs is in c->root.
+static size_t slh_fors(slh_t *c, uint32_t i, uint8_t *out) {
+    adrs_t a = { 0 };
     uint8_t node[N];
-    uint32_t acc = 0, nb = 0, at = 0;
     a.tree_hi = c->tree_hi; a.tree_lo = c->tree_lo;
     set_type(&a, FORS_TREE);
     a.w1 = c->leaf;
-    pk = a;
-    set_type(&pk, FORS_ROOTS);
-    pk.w1 = c->leaf;
-    tl_begin(c, &pk, &s);
-    for (uint32_t i = 0; i < c->k; i++) {
-        while (nb < c->a) {
-            acc = (acc << 8) | c->md[at++];
-            nb += 8;
-        }
-        nb -= c->a;
-        uint32_t idx = (acc >> nb) & ((1u << c->a) - 1);
-        uint8_t *p = out + i * (c->a + 1) * N;
-        fors_secret(c, &a, (i << c->a) + idx, p);
-        for (uint32_t j = 0; j < c->a; j++) {
-            fors_node(c, &a, (i << (c->a - j)) + ((idx >> j) ^ 1), j, p + (j + 1) * N);
-        }
-        a.w2 = 0; a.w3 = (i << c->a) + idx;
-        thash(c, &a, p, N, node);
-        climb(c, &a, idx, c->a, p + N, node);
-        sha_update(&s, node, N);
+    if (i == 0) {
+        adrs_t pk = a;
+        set_type(&pk, FORS_ROOTS);
+        pk.w1 = c->leaf;
+        tl_begin(c, &pk, &c->roots);
     }
-    sha_final(&s, c->root, N);
-    return (size_t)c->k * (c->a + 1) * N;
+    uint32_t idx = 0;                       // bits i*a .. i*a + a - 1 of md, high bit first
+    for (uint32_t b = i * c->a; b < (i + 1) * c->a; b++) {
+        idx = (idx << 1) | ((c->md[b >> 3] >> (7 - (b & 7))) & 1);
+    }
+    fors_secret(c, &a, (i << c->a) + idx, out);
+    for (uint32_t j = 0; j < c->a; j++) {
+        fors_node(c, &a, (i << (c->a - j)) + ((idx >> j) ^ 1), j, out + (j + 1) * N);
+    }
+    a.w2 = 0; a.w3 = (i << c->a) + idx;
+    thash(c, &a, out, N, node);
+    climb(c, &a, idx, c->a, out + N, node);
+    sha_update(&c->roots, node, N);
+    if (i == (uint32_t)c->k - 1) {
+        sha_final(&c->roots, c->root, N);
+    }
+    return (size_t)(c->a + 1) * N;
 }
 
 // One layer of the hypertree: (35 + hp) x 16 bytes into out. Returns how many layers are left.
@@ -470,7 +469,9 @@ int main(int argc, char **argv) {
     hex(root, N); printf("\n");
     slh_begin(&c, set, sk_seed, sk_prf, pk_seed, root, msg, msglen, part);
     hex(part, N);
-    hex(part, slh_fors(&c, part));
+    for (uint32_t i = 0; i < c.k; i++) {
+        hex(part, slh_fors(&c, i, part));
+    }
     int left;
     do {
         left = slh_layer(&c, part);
@@ -514,12 +515,16 @@ static mp_obj_t py_begin(size_t n, const mp_obj_t *a) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(begin_obj, 8, 8, py_begin);
 
-// fors(state, out): the FORS part into out. Returns its length.
-static mp_obj_t py_fors(mp_obj_t st, mp_obj_t out) {
+// fors(state, i, out): FORS tree i (0..k-1, in order) into out. Returns its length, (a + 1) x 16.
+static mp_obj_t py_fors(mp_obj_t st, mp_obj_t i, mp_obj_t out) {
     slh_t *c = STATE(st);
-    return mp_obj_new_int(slh_fors(c, buf(out, (size_t)c->k * (c->a + 1) * N, MP_BUFFER_WRITE)));
+    uint32_t n = mp_obj_get_int(i);
+    if (n >= c->k) {
+        mp_raise_ValueError(MP_ERROR_TEXT("done"));
+    }
+    return mp_obj_new_int(slh_fors(c, n, buf(out, (size_t)(c->a + 1) * N, MP_BUFFER_WRITE)));
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(fors_obj, py_fors);
+static MP_DEFINE_CONST_FUN_OBJ_3(fors_obj, py_fors);
 
 // layer(state, out): the next layer into out. Returns how many layers are left.
 static mp_obj_t py_layer(mp_obj_t st, mp_obj_t out) {

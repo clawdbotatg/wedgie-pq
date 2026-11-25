@@ -64,6 +64,29 @@ The signature matched `ref/wots.py` exactly.
 | Trust M counter step | 25 ms |
 | Sign with the stored seed, next public key included (`app/sign_seed.py`) | 6.4 s |
 
+## SLH-DSA (the standard, one key for good)
+
+`mp/slh/slh.c`: SLH-DSA signing (NIST FIPS 205), the SHA2-128s and SHA2-128f sets, as a native module
+(4.7 KB). One key signs any number of times: no counter, no next key. Made in pieces of at most 704
+bytes, so it fits a wedgie's RAM. OpenSSL verifies its signatures.
+
+```sh
+cc -O2 -DSLH_HOST -o /tmp/slhhost mp/slh/slh.c && python3 tools/check_slh.py /tmp/slhhost   # sign in C, verify with OpenSSL
+node tools/chip_slh.mjs 128f                                   # on a virtual RP2040 (wedgie-dev beside this repo)
+uv run --with pyserial python3 tools/bench_slh.py 128f 128s    # on a real wedgie (press its green button)
+```
+
+RP2040 Pico, firmware 0.3.87 (2026-11-25). Plain C SHA-256, not tuned. The virtual RP2040 gives the
+same times to the millisecond.
+
+| | 128f (fast) | 128s (small) |
+|---|---|---|
+| Signature | 17,088 bytes | 7,856 bytes |
+| Make the key (once) | 0.35 s | 22.4 s |
+| Sign | 8.2 s | 170 s |
+
+Try it with a wedgie plugged in: [wedgie.dev/pq](https://wedgie.dev/pq).
+
 ## Next
 
 Done: the seed in the Trust M (`app/pq_seed.py`, not locked yet), a counter so no key number is

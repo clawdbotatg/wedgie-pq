@@ -15,14 +15,17 @@ import pq_slh as S
 def _bench(set_, sk_seed, sk_prf, pk_seed, msg, title):
     hp, d, a, k = ((9, 7, 12, 14), (3, 22, 6, 33))[set_]
     st = bytearray(S.size()); root = bytearray(16); r = bytearray(16)
-    part = bytearray(max(k * (a + 1), 35 + hp) * 16)
+    part = bytearray(max(a + 1, 35 + hp) * 16)
     td = time.ticks_diff; now = time.ticks_ms
     t = now(); S.root(st, set_, sk_seed, pk_seed, root); key_ms = td(now(), t)
     print("K", binascii.hexlify(root).decode())
     t = now(); S.begin(st, set_, sk_seed, sk_prf, pk_seed, root, msg, r); ms = td(now(), t)
     print("S", binascii.hexlify(r).decode())
-    t = now(); n = S.fors(st, part); fors_ms = td(now(), t); ms += fors_ms
-    print("S", binascii.hexlify(part[:n]).decode())
+    fors_ms = 0
+    for i in range(k):
+        t = now(); n = S.fors(st, i, part); fors_ms += td(now(), t)
+        print("S", binascii.hexlify(part[:n]).decode())
+    ms += fors_ms
     n = (35 + hp) * 16
     worst = 0
     for i in range(d):
