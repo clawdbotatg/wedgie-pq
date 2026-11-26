@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Test, console} from "forge-std/Test.sol";
 import {SlhSigner} from "../src/SlhSigner.sol";
+import {SlhSafeFactory} from "../src/SlhSafeFactory.sol";
 
 interface IFactory {
     function createProxyWithNonce(address singleton, bytes memory initializer, uint256 saltNonce) external returns (address);
@@ -44,11 +45,19 @@ contract SafeTest is Test {
     function send(bool fast) internal {
         if (FACTORY.code.length == 0) return;      // no fork
         (bytes16 root,) = sign(fast, bytes32(0));
-        SlhSigner owner = new SlhSigner(bytes16(vm.parseBytes(string.concat("0x", SEED))), root, fast);
-        address[] memory owners = new address[](1);
-        owners[0] = address(owner);
-        ISafe safe = ISafe(IFactory(FACTORY).createProxyWithNonce(SAFE_L2,
-            abi.encodeCall(ISafe.setup, (owners, 1, address(0), "", HANDLER, address(0), 0, payable(0))), 1));
+        bytes16 seed = bytes16(vm.parseBytes(string.concat("0x", SEED)));
+        SlhSafeFactory f = new SlhSafeFactory();
+        address saidOwner = f.ownerOf(seed, root, fast);
+        address saidSafe = f.safeOf(seed, root, fast, 0);
+        (address o, address s) = f.make(seed, root, fast, 0);
+        assertEq(o, saidOwner);
+        assertEq(s, saidSafe);
+        (, address s1) = f.make(seed, root, fast, 1);          // a second Safe, the same owner contract
+        assertEq(s1, f.safeOf(seed, root, fast, 1));
+        vm.expectRevert();
+        f.make(seed, root, fast, 0);
+        SlhSigner owner = SlhSigner(o);
+        ISafe safe = ISafe(s);
         vm.deal(address(safe), 1 ether);
         address to = address(0xBEEF);
         uint256 had = to.balance;

@@ -96,3 +96,15 @@ used twice, checked with `tools/check_seed.py`.
 2. A contract that checks the STARK and acts as the Safe owner.
 
 MIT
+
+## A Safe owned by an SLH-DSA key
+
+`contracts/`: `SlhSigner` (a Safe owner that checks an SLH-DSA signature, EIP-1271) and `SlhSafeFactory`
+(makes the owner and a Safe 1.4.1 in one transaction). Not audited. The factory is at
+`0xc7bdA0EF354ff3F547c0DFa15Cd56cfdD6746f62` on Ethereum and Base. A send costs 2.75M gas with the 17 KB
+signature, 1.1M with the 7.9 KB one. Try it: wedgie.dev/pqsafe, or `tools/safe_slh.py`.
+
+```
+cd contracts && forge install foundry-rs/forge-std --no-git && forge test
+cc -O2 -DSLH_HOST -o /tmp/slhhost ../mp/slh/slh.c && forge test --ffi --match-contract SafeTest --fork-url <an Alchemy URL>
+```

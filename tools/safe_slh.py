@@ -26,7 +26,9 @@ CODE = """
 import gc, binascii, optiga
 import pq_slh as _S
 def _parts():
-    return optiga.Chip().derive(optiga.DATA[9], 48, b"slh-dsa safe owner 0", method="prf256")
+    # two 32-byte derives (a size every Trust M does); wedgie.dev/pqsafe makes the same key the same way
+    c = optiga.Chip()
+    return c.derive(optiga.DATA[9], 32, b"slh-dsa safe owner 0 a", method="prf256") + c.derive(optiga.DATA[9], 32, b"slh-dsa safe owner 0 b", method="prf256")
 def _pub(set_):
     k = _parts(); st = bytearray(_S.size()); root = bytearray(16)
     _S.root(st, set_, k[:16], k[32:48], root)
